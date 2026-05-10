@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>문서 요약기 | TextRank</title>
+  <title>문서 도구 | TextRank 요약 · PDF 나누기</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
@@ -12,13 +12,25 @@
   <div class="app">
     <header class="header">
       <div class="header-content">
-        <div class="header-badge">TextRank AI</div>
-        <h1>문서 요약기</h1>
-        <p>PDF · DOCX 파일을 업로드하면<br>TextRank 알고리즘으로 핵심만 추출합니다</p>
+        <div class="header-badge">문서 도구</div>
+        <h1>문서 요약 · PDF 나누기</h1>
+        <p>TextRank 요약 · PDF 분할 · 브라우저에서만 처리</p>
       </div>
     </header>
 
     <main class="main">
+
+      <!-- ══ 문서 요약 ══════════════════════════════════════ -->
+      <div class="feature-divider">
+        <div class="divider-line"></div>
+        <span class="divider-label">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M2 4h12M2 8h8M2 12h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          문서 요약
+        </span>
+        <div class="divider-line"></div>
+      </div>
 
       <!-- Upload Card -->
       <section class="card upload-card">
@@ -118,10 +130,137 @@
         <div class="result-body" id="resultContent"></div>
       </section>
 
+      <!-- ══ PDF 나누기 ═════════════════════════════════════ -->
+      <div class="feature-divider">
+        <div class="divider-line"></div>
+        <span class="divider-label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="6" cy="6" r="3" stroke="currentColor" stroke-width="1.8"/>
+            <circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="1.8"/>
+            <line x1="8.5" y1="7.5" x2="21" y2="3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <line x1="8.5" y1="16.5" x2="21" y2="21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <line x1="8.5" y1="10" x2="14" y2="12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          PDF 나누기
+        </span>
+        <div class="divider-line"></div>
+      </div>
+
+      <!-- Split Upload Card -->
+      <section class="card upload-card">
+        <div class="upload-area" id="splitDropZone" role="button" tabindex="0" aria-label="PDF 파일 업로드">
+          <div class="upload-icon split-icon">
+            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M28 4H12a4 4 0 0 0-4 4v32a4 4 0 0 0 4 4h24a4 4 0 0 0 4-4V20L28 4z" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <polyline points="28,4 28,20 44,20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="16" y1="28" x2="32" y2="28" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="4 3"/>
+            </svg>
+          </div>
+          <p class="upload-title">PDF 파일을 드래그하거나 클릭하여 업로드</p>
+          <p class="upload-subtitle">PDF 형식만 지원 · 최대 50MB</p>
+          <input type="file" id="splitFileInput" accept=".pdf" hidden>
+        </div>
+
+        <div class="file-info" id="splitFileInfo" hidden>
+          <span class="file-type-badge">PDF</span>
+          <span class="file-name" id="splitFileName"></span>
+          <span class="page-badge" id="splitPageCount"></span>
+          <button class="remove-btn" id="splitRemoveBtn" aria-label="파일 제거">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <line x1="3" y1="3" x2="13" y2="13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <line x1="13" y1="3" x2="3" y2="13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- Split Controls Card -->
+      <section class="card" id="splitControlsCard">
+        <!-- Method selector -->
+        <fieldset class="method-fieldset">
+          <legend class="method-legend">나누기 방식</legend>
+          <div class="method-options">
+            <label class="method-option">
+              <input type="radio" name="splitMethod" value="range" checked>
+              <span class="method-option-body">
+                <span class="method-title">범위 직접 입력</span>
+                <span class="method-desc">1-3, 4-8, 9 형식으로 입력</span>
+              </span>
+            </label>
+            <label class="method-option">
+              <input type="radio" name="splitMethod" value="npage">
+              <span class="method-option-body">
+                <span class="method-title">N페이지씩 균등 분할</span>
+                <span class="method-desc">지정한 페이지 수마다 자동 분할</span>
+              </span>
+            </label>
+          </div>
+        </fieldset>
+
+        <!-- Range panel -->
+        <div class="input-panel" id="rangePanel">
+          <label class="input-label" for="rangeInput">페이지 범위</label>
+          <input type="text" class="text-input" id="rangeInput"
+                 placeholder="예: 1-3, 4-8, 9-12" autocomplete="off" spellcheck="false">
+          <p class="input-hint" id="rangePreview">각 범위가 별도 PDF 파일이 됩니다 · 쉼표로 구분</p>
+        </div>
+
+        <!-- N-page panel -->
+        <div class="input-panel" id="npagePanel" hidden>
+          <label class="input-label" for="npageInput">몇 페이지씩 나눌까요?</label>
+          <div class="npage-row">
+            <input type="number" class="number-input" id="npageInput" min="1" value="5">
+            <span class="npage-unit">페이지씩</span>
+          </div>
+          <p class="input-hint" id="npagePreview">파일을 먼저 업로드해 주세요</p>
+        </div>
+
+        <button class="summarize-btn" id="splitBtn" disabled>
+          <span class="btn-text">나누기</span>
+          <span class="btn-icon" aria-hidden="true">✂</span>
+        </button>
+      </section>
+
+      <!-- Split Loading -->
+      <div class="loading-card card" id="splitLoading" hidden role="status" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>PDF를 분할하는 중...</p>
+      </div>
+
+      <!-- Split Error -->
+      <div class="error-card card" id="splitErrorCard" hidden role="alert" aria-live="assertive">
+        <span class="error-icon" aria-hidden="true">
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="10" cy="10" r="8.5" stroke="currentColor" stroke-width="1.5"/>
+            <line x1="10" y1="6" x2="10" y2="11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="10" cy="13.5" r="0.8" fill="currentColor"/>
+          </svg>
+        </span>
+        <p class="error-message" id="splitErrorMsg"></p>
+      </div>
+
+      <!-- Split Result -->
+      <section class="card" id="splitResultCard" hidden>
+        <div class="result-header">
+          <div class="result-title-group">
+            <h2>나누기 결과</h2>
+            <span class="result-meta" id="splitResultMeta"></span>
+          </div>
+          <button class="copy-btn" id="downloadAllBtn">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M2 11v1.5A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5V11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            전체 ZIP
+          </button>
+        </div>
+        <div class="split-result-list" id="splitResultList"></div>
+      </section>
+
     </main>
 
     <footer class="footer">
-      <p>TextRank 알고리즘 기반 · 브라우저에서만 처리 · 파일이 서버로 전송되지 않습니다</p>
+      <p>브라우저에서만 처리 · 파일이 서버로 전송되지 않습니다</p>
     </footer>
   </div>
 
@@ -133,6 +272,8 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

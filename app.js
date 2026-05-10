@@ -349,6 +349,306 @@ function escHtml(str) {
 }
 
 // ── Copy ───────────────────────────────────────────────────────────────────
+// ── PDF Split ──────────────────────────────────────────────────────────────
+
+const splitDropZone   = document.getElementById('splitDropZone');
+const splitFileInput  = document.getElementById('splitFileInput');
+const splitFileInfo   = document.getElementById('splitFileInfo');
+const splitFileNameEl = document.getElementById('splitFileName');
+const splitPageCountEl= document.getElementById('splitPageCount');
+const splitRemoveBtn  = document.getElementById('splitRemoveBtn');
+const rangePanel      = document.getElementById('rangePanel');
+const npagePanel      = document.getElementById('npagePanel');
+const rangeInput      = document.getElementById('rangeInput');
+const rangePreview    = document.getElementById('rangePreview');
+const npageInput      = document.getElementById('npageInput');
+const npagePreview    = document.getElementById('npagePreview');
+const splitBtn        = document.getElementById('splitBtn');
+const splitLoading    = document.getElementById('splitLoading');
+const splitErrorCard  = document.getElementById('splitErrorCard');
+const splitErrorMsg   = document.getElementById('splitErrorMsg');
+const splitResultCard = document.getElementById('splitResultCard');
+const splitResultList = document.getElementById('splitResultList');
+const splitResultMeta = document.getElementById('splitResultMeta');
+const downloadAllBtn  = document.getElementById('downloadAllBtn');
+
+let splitFile       = null;
+let splitTotalPages = 0;
+let splitParts      = [];   // { bytes, filename, start, end }
+
+// ── Split drag & drop ──────────────────────────────────────────────────────
+splitDropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  splitDropZone.classList.add('drag-over');
+});
+['dragleave', 'dragend'].forEach(ev =>
+  splitDropZone.addEventListener(ev, () => splitDropZone.classList.remove('drag-over'))
+);
+splitDropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  splitDropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) setSplitFile(file);
+});
+splitDropZone.addEventListener('click', () => splitFileInput.click());
+splitDropZone.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); splitFileInput.click(); }
+});
+splitFileInput.addEventListener('change', e => {
+  if (e.target.files[0]) setSplitFile(e.target.files[0]);
+});
+
+splitRemoveBtn.addEventListener('click', () => {
+  splitFile       = null;
+  splitTotalPages = 0;
+  splitParts      = [];
+  splitFileInput.value = '';
+  splitDropZone.hidden = false;
+  splitFileInfo.hidden = true;
+  splitBtn.disabled    = true;
+  hideSplitResult();
+  hideSplitError();
+  rangePreview.textContent = '각 범위가 별도 PDF 파일이 됩니다 · 쉼표로 구분';
+  rangePreview.className   = 'input-hint';
+  npagePreview.textContent = '파일을 먼저 업로드해 주세요';
+});
+
+async function setSplitFile(file) {
+  if (file.name.split('.').pop().toLowerCase() !== 'pdf') {
+    showSplitError('PDF 파일만 지원합니다.');
+    return;
+  }
+
+  splitFile = file;
+  splitFileNameEl.textContent = file.name;
+  splitDropZone.hidden = true;
+  splitFileInfo.hidden = false;
+  splitPageCountEl.textContent = '페이지 계산 중…';
+  hideSplitResult();
+  hideSplitError();
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const doc    = await PDFLib.PDFDocument.load(buffer, { ignoreEncryption: true });
+    splitTotalPages = doc.getPageCount();
+    splitPageCountEl.textContent = `${splitTotalPages}페이지`;
+    splitBtn.disabled = false;
+    updateNpagePreview();
+  } catch {
+    showSplitError('PDF를 읽을 수 없습니다. 파일이 손상되었거나 암호화된 PDF입니다.');
+    splitDropZone.hidden = false;
+    splitFileInfo.hidden = true;
+    splitFile = null;
+  }
+}
+
+// ── Method switch ──────────────────────────────────────────────────────────
+document.querySelectorAll('input[name="splitMethod"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    const isRange = radio.value === 'range';
+    rangePanel.hidden  = !isRange;
+    npagePanel.hidden  = isRange;
+    if (!isRange) updateNpagePreview();
+  });
+});
+
+// ── Range input preview ────────────────────────────────────────────────────
+rangeInput.addEventListener('input', updateRangePreview);
+
+function updateRangePreview() {
+  if (!rangeInput.value.trim()) {
+    rangePreview.textContent = '각 범위가 별도 PDF 파일이 됩니다 · 쉼표로 구분';
+    rangePreview.className   = 'input-hint';
+    return;
+  }
+  try {
+    const ranges = parseRanges(rangeInput.value, splitTotalPages || 9999);
+    const parts  = ranges.map(([s, e]) => s === e ? `${s}p` : `${s}~${e}p`).join(', ');
+    rangePreview.textContent = `파일 ${ranges.length}개 생성 예정 (${parts})`;
+    rangePreview.className   = 'input-hint valid';
+  } catch (err) {
+    rangePreview.textContent = err.message;
+    rangePreview.className   = 'input-hint invalid';
+  }
+}
+
+// ── N-page preview ─────────────────────────────────────────────────────────
+npageInput.addEventListener('input', updateNpagePreview);
+
+function updateNpagePreview() {
+  const n = parseInt(npageInput.value, 10);
+  if (!splitTotalPages || isNaN(n) || n < 1) {
+    npagePreview.textContent = '파일을 먼저 업로드해 주세요';
+    npagePreview.className   = 'input-hint';
+    return;
+  }
+  const ranges  = buildNPageRanges(n, splitTotalPages);
+  const preview = ranges.slice(0, 3).map(([s, e]) => `${s}~${e}p`).join(', ');
+  const more    = ranges.length > 3 ? ` … 등 총 ${ranges.length}개` : `(총 ${ranges.length}개)`;
+  npagePreview.textContent = `${preview}${more}`;
+  npagePreview.className   = 'input-hint valid';
+}
+
+// ── Range parsing ──────────────────────────────────────────────────────────
+function parseRanges(input, total) {
+  const parts = input.split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.length === 0) throw new Error('범위를 입력해 주세요.');
+
+  return parts.map(part => {
+    const m = part.match(/^(\d+)(?:[–\-](\d+))?$/);
+    if (!m) throw new Error(`잘못된 형식: "${part}" (예: 1-3)`);
+    const s = parseInt(m[1], 10);
+    const e = m[2] ? parseInt(m[2], 10) : s;
+    if (s < 1)      throw new Error(`페이지 번호는 1 이상이어야 합니다 (입력: ${s})`);
+    if (e > total)  throw new Error(`페이지 ${e}는 전체 ${total}페이지를 초과합니다`);
+    if (s > e)      throw new Error(`시작(${s})이 끝(${e})보다 클 수 없습니다`);
+    return [s, e];
+  });
+}
+
+function buildNPageRanges(n, total) {
+  const ranges = [];
+  for (let s = 1; s <= total; s += n) {
+    ranges.push([s, Math.min(s + n - 1, total)]);
+  }
+  return ranges;
+}
+
+// ── Split execution ────────────────────────────────────────────────────────
+splitBtn.addEventListener('click', runSplit);
+
+async function runSplit() {
+  if (!splitFile) return;
+
+  const method = document.querySelector('input[name="splitMethod"]:checked').value;
+  let ranges;
+
+  try {
+    if (method === 'range') {
+      ranges = parseRanges(rangeInput.value, splitTotalPages);
+    } else {
+      const n = parseInt(npageInput.value, 10);
+      if (isNaN(n) || n < 1) throw new Error('1 이상의 숫자를 입력해 주세요.');
+      ranges = buildNPageRanges(n, splitTotalPages);
+    }
+  } catch (err) {
+    showSplitError(err.message);
+    return;
+  }
+
+  showSplitLoading();
+  hideSplitResult();
+  hideSplitError();
+
+  try {
+    const buffer  = await splitFile.arrayBuffer();
+    const srcDoc  = await PDFLib.PDFDocument.load(buffer, { ignoreEncryption: true });
+    const baseName = splitFile.name.replace(/\.pdf$/i, '');
+
+    splitParts = [];
+    for (let i = 0; i < ranges.length; i++) {
+      const [s, e]  = ranges[i];
+      const newDoc  = await PDFLib.PDFDocument.create();
+      const indices = Array.from({ length: e - s + 1 }, (_, k) => s - 1 + k);
+      const copied  = await newDoc.copyPages(srcDoc, indices);
+      copied.forEach(p => newDoc.addPage(p));
+      const bytes   = await newDoc.save();
+      const pad     = String(i + 1).padStart(2, '0');
+      splitParts.push({ bytes, filename: `${baseName}_part${pad}.pdf`, start: s, end: e });
+    }
+
+    showSplitResult(splitParts, splitTotalPages);
+  } catch (err) {
+    showSplitError(err.message || 'PDF 분할 중 오류가 발생했습니다.');
+  } finally {
+    hideSplitLoading();
+  }
+}
+
+// ── Split UI helpers ───────────────────────────────────────────────────────
+function showSplitLoading() {
+  splitLoading.hidden = true;
+  // brief delay so DOM can repaint before heavy computation
+  splitLoading.hidden = false;
+  splitBtn.disabled   = true;
+}
+
+function hideSplitLoading() {
+  splitLoading.hidden = true;
+  if (splitFile) splitBtn.disabled = false;
+}
+
+function showSplitResult(parts, total) {
+  splitResultMeta.textContent = `총 ${total}페이지 → ${parts.length}개 파일`;
+
+  splitResultList.innerHTML = parts
+    .map((p, i) => {
+      const pageLabel = p.start === p.end ? `${p.start}페이지` : `${p.start} ~ ${p.end}페이지`;
+      const kb        = (p.bytes.byteLength / 1024).toFixed(0);
+      return `
+        <div class="split-item" style="animation-delay:${i * 50}ms">
+          <div class="split-item-icon">PDF</div>
+          <div class="split-item-info">
+            <div class="split-item-name">${escHtml(p.filename)}</div>
+            <div class="split-item-pages">${pageLabel} · ${kb} KB</div>
+          </div>
+          <button class="download-btn" data-index="${i}" aria-label="${escHtml(p.filename)} 다운로드">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M2 11v1.5A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5V11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            다운로드
+          </button>
+        </div>`;
+    })
+    .join('');
+
+  splitResultList.querySelectorAll('.download-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const part = splitParts[+btn.dataset.index];
+      downloadBlob(new Blob([part.bytes], { type: 'application/pdf' }), part.filename);
+    });
+  });
+
+  splitResultCard.hidden = false;
+}
+
+function hideSplitResult()  { splitResultCard.hidden = true; }
+function showSplitError(msg){ splitErrorMsg.textContent = msg; splitErrorCard.hidden = false; }
+function hideSplitError()   { splitErrorCard.hidden = true; }
+
+// ── Download all as ZIP ────────────────────────────────────────────────────
+downloadAllBtn.addEventListener('click', async () => {
+  if (!splitParts.length) return;
+  downloadAllBtn.textContent = '압축 중…';
+  downloadAllBtn.disabled    = true;
+  try {
+    const zip = new JSZip();
+    splitParts.forEach(p => zip.file(p.filename, p.bytes));
+    const blob     = await zip.generateAsync({ type: 'blob' });
+    const baseName = splitFile?.name.replace(/\.pdf$/i, '') ?? 'document';
+    downloadBlob(blob, `${baseName}_split.zip`);
+  } finally {
+    downloadAllBtn.innerHTML = `
+      <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M2 11v1.5A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5V11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+      전체 ZIP`;
+    downloadAllBtn.disabled = false;
+  }
+});
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a   = Object.assign(document.createElement('a'), { href: url, download: filename });
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+// ── Copy ───────────────────────────────────────────────────────────────────
 copyBtn.addEventListener('click', async () => {
   const sentences = [...resultContent.querySelectorAll('.sentence-text')]
     .map(el => el.textContent)
