@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>문서 요약기 | TextRank</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header-content">
+        <div class="header-badge">TextRank AI</div>
+        <h1>문서 요약기</h1>
+        <p>PDF · DOCX 파일을 업로드하면<br>TextRank 알고리즘으로 핵심만 추출합니다</p>
+      </div>
+    </header>
+
+    <main class="main">
+
+      <!-- Upload Card -->
+      <section class="card upload-card">
+        <div class="upload-area" id="dropZone" role="button" tabindex="0" aria-label="파일 업로드">
+          <div class="upload-icon">
+            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M28 4H12a4 4 0 0 0-4 4v32a4 4 0 0 0 4 4h24a4 4 0 0 0 4-4V20L28 4z" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <polyline points="28,4 28,20 44,20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="24" y1="34" x2="24" y2="26" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+              <polyline points="20,30 24,26 28,30" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <p class="upload-title">파일을 드래그하거나 클릭하여 업로드</p>
+          <p class="upload-subtitle">PDF · DOCX 형식 지원 · 최대 50MB</p>
+          <input type="file" id="fileInput" accept=".pdf,.docx" hidden>
+        </div>
+
+        <div class="file-info" id="fileInfo" hidden>
+          <span class="file-type-badge" id="fileTypeBadge">PDF</span>
+          <span class="file-name" id="fileName">document.pdf</span>
+          <button class="remove-btn" id="removeBtn" aria-label="파일 제거">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <line x1="3" y1="3" x2="13" y2="13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <line x1="13" y1="3" x2="3" y2="13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- Controls Card -->
+      <section class="card controls-card">
+        <div class="slider-section">
+          <div class="slider-header">
+            <span class="slider-label">요약 문장 수</span>
+            <span class="sentence-display">
+              <span id="sentenceCount">3</span><span class="sentence-unit">문장</span>
+            </span>
+          </div>
+
+          <div class="slider-wrapper">
+            <input
+              type="range"
+              id="sentenceSlider"
+              min="1" max="5" value="3" step="1"
+              aria-label="요약 문장 수"
+              aria-valuemin="1" aria-valuemax="5" aria-valuenow="3"
+            >
+            <div class="slider-ticks" aria-hidden="true">
+              <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+            </div>
+          </div>
+
+          <div class="slider-descriptions" aria-hidden="true">
+            <span>한 줄 요약</span><span></span><span>균형</span><span></span><span>상세 요약</span>
+          </div>
+        </div>
+
+        <button class="summarize-btn" id="summarizeBtn" disabled>
+          <span class="btn-text">요약하기</span>
+          <span class="btn-icon" aria-hidden="true">→</span>
+        </button>
+      </section>
+
+      <!-- Loading -->
+      <div class="loading-card card" id="loading" hidden role="status" aria-live="polite">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>문서를 분석하는 중...</p>
+      </div>
+
+      <!-- Error -->
+      <div class="error-card card" id="errorCard" hidden role="alert" aria-live="assertive">
+        <span class="error-icon" aria-hidden="true">
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="10" cy="10" r="8.5" stroke="currentColor" stroke-width="1.5"/>
+            <line x1="10" y1="6" x2="10" y2="11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="10" cy="13.5" r="0.8" fill="currentColor"/>
+          </svg>
+        </span>
+        <p class="error-message" id="errorMessage"></p>
+      </div>
+
+      <!-- Result Card -->
+      <section class="result-card card" id="resultCard" hidden>
+        <div class="result-header">
+          <div class="result-title-group">
+            <h2>요약 결과</h2>
+            <span class="result-meta" id="resultMeta"></span>
+          </div>
+          <button class="copy-btn" id="copyBtn" aria-label="결과 복사">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" stroke="currentColor" stroke-width="1.4"/>
+            </svg>
+            복사
+          </button>
+        </div>
+        <div class="result-body" id="resultContent"></div>
+      </section>
+
+    </main>
+
+    <footer class="footer">
+      <p>TextRank 알고리즘 기반 · 브라우저에서만 처리 · 파일이 서버로 전송되지 않습니다</p>
+    </footer>
+  </div>
+
+  <noscript>
+    <div style="padding:2rem;text-align:center;font-family:sans-serif;">
+      이 앱은 JavaScript가 필요합니다. 브라우저 설정에서 JavaScript를 활성화해 주세요.
+    </div>
+  </noscript>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
